@@ -9,7 +9,7 @@
  * MIT or <http://www.apache.org/licenses/LICENSE-2.0> for Apache.
  */
 
-import { Work, ServiceWorkerWork } from "./types";
+import {Work, PoWConfig, ServiceWorkerAction} from "./types";
 import fetchPoWConfig from "./fetchPoWConfig";
 import sendWork from "./sendWork";
 import sendToParent from "./sendToParent";
@@ -26,15 +26,11 @@ export const registerVerificationEventHandler = (): void => {
     document.querySelector(".widget__verification-container")
   );
   verificationContainer.style.display = "flex";
-  CONST.btn().addEventListener("click", (e) => solveCaptchaRunner(e));
 };
 
-export const solveCaptchaRunner = async (e: Event): Promise<void> => {
-  if (LOCK) {
-    e.preventDefault();
-    return;
-  }
+let config: PoWConfig;
 
+export const solveCaptchaRunner = async (): Promise<void> => {
   try {
     LOCK = true;
     if (CONST.btn().checked == false) {
@@ -42,27 +38,38 @@ export const solveCaptchaRunner = async (e: Event): Promise<void> => {
       LOCK = false;
       return;
     }
-    e.preventDefault();
     // steps:
 
     // 1. show during
     CONST.messageText().during();
     // 1. get config
-    const config = await fetchPoWConfig();
+    config = await fetchPoWConfig();
     // 2. prove work
     worker.postMessage(config);
+  } catch (e) {
+    CONST.messageText().error();
+    console.error(e);
+    LOCK = false;
+  }
+};
 
-    worker.onmessage = async (event: MessageEvent) => {
-      const resp: ServiceWorkerWork = event.data;
+registerVerificationEventHandler();
+
+worker.onmessage = async (event: MessageEvent) => {
+  const resp: ServiceWorkerAction = event.data;
+  switch (resp.type) {
+    case "init":
+      return await solveCaptchaRunner();
+    case "result":
       console.log(
-        `Proof generated. Difficuly: ${config.difficulty_factor} Duration: ${resp.duration}`
+        `Proof generated. Difficuly: ${config.difficulty_factor} Duration: ${resp.payload.duration}`
       );
 
       const proof: Work = {
         key: CONST.sitekey(),
         string: config.string,
-        nonce: resp.work.nonce,
-        result: resp.work.result,
+        nonce: resp.payload.work.nonce,
+        result: resp.payload.work.result,
       };
 
       // 3. submit work
@@ -73,13 +80,5 @@ export const solveCaptchaRunner = async (e: Event): Promise<void> => {
       CONST.btn().checked = true;
       CONST.messageText().after();
       LOCK = false;
-    };
-  } catch (e) {
-    CONST.messageText().error();
-    console.error(e);
-    LOCK = false;
   }
 };
-
-registerVerificationEventHandler();
-window.onload = () => CONST.btn().click();

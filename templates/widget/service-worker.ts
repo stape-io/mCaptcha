@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import prove from "./prove";
-import { PoWConfig, ServiceWorkerWork } from "./types";
+import {PoWConfig, ServiceWorkerWork} from "./types";
 import log from "../logger";
 
 log.log("worker registered");
@@ -29,10 +29,12 @@ onmessage = async (e) => {
   const t1 = performance.now();
   const duration = t1 - t0;
 
-  const res: ServiceWorkerWork = {
+  const payload: ServiceWorkerWork = {
     work,
     duration,
   };
 
-  postMessage(res);
+  postMessage({type: 'result', payload});
 };
+
+postMessage({type: 'init'})

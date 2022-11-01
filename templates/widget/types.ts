@@ -26,6 +26,14 @@ export type ServiceWorkerWork = {
   duration: number;
 };
 
+export type ServiceWorkerAction = {
+  type: 'init'
+} | {
+  type: 'result';
+  payload: ServiceWorkerWork;
+}
+
+
 export type PoWConfig = {
   string: string;
   difficulty_factor: number;

@@ -33,13 +33,7 @@ let config: PoWConfig;
 export const solveCaptchaRunner = async (): Promise<void> => {
   try {
     LOCK = true;
-    if (CONST.btn().checked == false) {
-      CONST.messageText().before();
-      LOCK = false;
-      return;
-    }
     // steps:
-
     // 1. show during
     CONST.messageText().during();
     // 1. get config
@@ -57,6 +51,7 @@ registerVerificationEventHandler();
 
 worker.onmessage = async (event: MessageEvent) => {
   const resp: ServiceWorkerAction = event.data;
+  console.log(resp);
   switch (resp.type) {
     case "init":
       return await solveCaptchaRunner();

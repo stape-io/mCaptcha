@@ -82,4 +82,4 @@ export const solveCaptchaRunner = async (e: Event): Promise<void> => {
 };
 
 registerVerificationEventHandler();
-CONST.btn().click();
+window.onload = () => CONST.btn().click();

@@ -51,15 +51,10 @@ registerVerificationEventHandler();
 
 worker.onmessage = async (event: MessageEvent) => {
   const resp: ServiceWorkerAction = event.data;
-  console.log(resp);
   switch (resp.type) {
     case "init":
       return await solveCaptchaRunner();
     case "result":
-      console.log(
-        `Proof generated. Difficuly: ${config.difficulty_factor} Duration: ${resp.payload.duration}`
-      );
-
       const proof: Work = {
         key: CONST.sitekey(),
         string: config.string,

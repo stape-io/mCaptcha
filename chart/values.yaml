@@ -1,0 +1,251 @@
+# Override resource names
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------
+# Values associated with deployment
+# ---------------------------------
+
+deployment:
+  # Deployment annotations
+  annotations: {}
+  # Usage:
+    # imageregistry: "https://hub.docker.com/"
+
+  # Additional labels for deployment
+  extraLabels: {}
+  # Usage:
+    # component: app
+  
+  # Annotation for deployment pod
+  podAnnotations: {}
+  # Usage:
+    # imageregistry: "https://hub.docker.com/"
+
+  # The number of replicas. Do not specify it if you are using HPA
+  replicaCount: 1
+  
+  # Deployment strategy
+  strategy: {}
+  # Usage:
+    # type: RollingUpdate
+    # maxSurge: 0
+    # maxUnavailable: 20%
+
+    # type: Recreate
+
+  # Environment variables
+  env: {}
+  # Usage:
+  # env:
+  # - name: DEBUG
+  #   value: "false"
+
+  # Security context for pod & container
+  securityContext: {}
+  # Usage:
+    # pod:
+    #   fsGroup: 101
+    #   fsGroupChangePolicy: "OnRootMismatch"
+    # container:
+    #   runAsUser: 101
+    #   runAsGroup: 101
+    #   allowPrivilegeEscalation: false
+
+  # Additional init containers
+  extraInitContainers: {}
+  # Usage:
+  # extraInitContainers: |
+  # - name: app
+  #   image: "alpine"
+  #   command: [sh, -c]
+  #   args:
+  #     - ls /tmp 
+  #   volumeMounts:
+  #     - name: plugins
+  #       mountPath: /usr/local/libexec
+
+  # Docker configuration secret used to pull images from a private registry
+  imagePullSecrets: {}
+  # Usage:
+    # - name: image-pull-secret-name
+
+  # Image configuration
+  image: {}
+  # Usage:
+    # repository: nginx
+    # pullPolicy: IfNotPresent
+    # tag: "" - default "latest"
+
+  # Container resources
+  resources: {}
+  # Usage:
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+  # Volumes
+  volumes: {}
+  # Usage:
+  # volumes: |
+  #   - name: plugins
+  #     emptyDir: {}
+  #   - name: tls
+  #     secretName: example
+  
+  # Volume mounts
+  volumeMounts: {}
+  # Usage: 
+    # - mountPath: /usr/local/libexec
+    #   name: plugins
+    #   readOnly: true
+
+  # Affinity
+  affinity: {}
+  # Usage:
+  # affinity: |
+  #   podAntiAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       - labelSelector:
+  #           matchLabels:
+  #             app.kubernetes.io/name: app
+  #         topologyKey: kubernetes.io/zone
+
+  # Tolerations
+  tolerations: {}
+  # Usage:
+  # tolerations: |
+  #   - key: "key1"
+  #     operator: "Equal"
+  #     value: "value1"
+  #     effect: "NoSchedule"
+  
+  # Node selector
+  nodeSelector: {}
+  # Usage: 
+  # nodeSelector: |
+  #   disktype: ssd 
+
+# -----------------------------------
+# Values associated with certificate
+# -----------------------------------
+
+certificate:
+# Usage: 
+  host: example.com  # Replace with your domain
+  issuer: {}
+    # name: letsencrypt-prod  # You can override the default issuer here
+    # kind: Issuer            # Optionally change to 'Issuer' or other issuer types
+  # extraLabels:
+  #   app: myapp
+  extraAnnotations: {}
+    # cert-manager.io/alt-names: "example.com,www.example.com"
+
+# --------------------------------------
+# Values associated with service account
+# --------------------------------------
+
+serviceAccount:
+  # Creation of service account (true/false)
+  create: true
+
+  # Service account annotations
+  annotations: {}
+  # Usage:
+    # imageregistry: "https://hub.docker.com/"
+
+  # Additional labels for service account
+  extraLabels: {}
+  # Usage:
+    # component: app
+
+  # Automount service account token (true/flase)
+  automount: true
+
+  # Override name of service account
+  name: ""
+
+# ------------------------------
+# Values associated with service
+# ------------------------------
+
+service:
+# Usage:
+  annotations: {}
+    # imageregistry: "https://hub.docker.com/"
+
+  # Additional labels for service
+  extraLabels: {}
+    # component: app
+
+  # Service scheme (http/https)
+  scheme: http
+
+  # Service type
+  type: ClusterIP
+  
+  # Service Protocol
+  protocol: TCP
+
+  # Service port & target port
+  port: 80
+  targetPort: 80
+
+# -----------------------------------
+# Values associated with ingressRoute
+# -----------------------------------
+
+ingressRoute:
+# Usage:
+  enabled: true  # Set to false to disable the IngressRoute
+  # entryPoints:
+  #   - websecure
+  # extraLabels:
+  #   app: myapp
+  # extraAnnotations:
+  #   traefik.ingress.kubernetes.io/rewrite-target: /
+  services:
+    broadcaster:
+      name: broadcaster
+      port: 80
+    main:
+      port: 80
+  basicAuth:
+    enabled: false
+  tls:
+    enabled: true
+
+
+# --------------------------
+# Values associated with HPA
+# --------------------------
+
+autoscaling:
+# Usage:
+  # Creationg of HPA (true/false)
+  enabled: true
+  
+  # Min replicas
+  minReplicas: 1
+
+  # Max replicas
+  maxReplicas: 3
+  
+  # CPU utilization
+  targetCPUUtilizationPercentage: 80
+
+  # Memory utilization
+  targetMemoryUtilizationPercentage: 80
+
+# ----------------------------------
+# Values associated with broadcaster
+# ----------------------------------
+
+broadcaster:
+# Usage:
+  image:
+    repository: "europe-west1-docker.pkg.dev/gtm-server-69/stape"
+    tag: "62b4bbd"

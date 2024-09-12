@@ -1,0 +1,24 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ template "app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- if .Values.certificate.extraLabels -}}
+      {{- toYaml .Values.certificate.extraLabels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- if .Values.certificate.extraAnnotations }}
+      {{- toYaml .Values.certificate.extraAnnotations | nindent 4 }}
+    {{- end }}
+spec:
+  commonName: {{ .Values.certificate.host }}
+  secretName: {{ template "app.fullname" . }}-certificate
+  dnsNames:
+    - {{ .Values.certificate.host }}
+  issuerRef:
+    name: {{ .Values.certificate.issuer.name | default "cloudflare" }}
+    kind: {{ .Values.certificate.issuer.kind | default "ClusterIssuer" }}
+
+

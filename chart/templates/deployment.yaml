@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- if  .Values.deployment.extraLabels -}}
+      {{- toYaml .Values.deployment.extraLabels | nindent 4 -}}
+    {{- end -}}
+  {{- template "app.deployment.annotations" . }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.deployment.replicaCount }}
+  {{- end }}
+  {{- template "app.deployment.strategy" . }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+        {{- if  .Values.deployment.extraLabels -}}
+          {{- toYaml .Values.deployment.extraLabels | nindent 8 -}}
+        {{- end -}}
+        {{ template "app.pod.annotations" . }}
+    spec:
+      serviceAccountName: {{ template "app.serviceAccount.name" . }}
+      {{- include "imagePullSecrets" . | nindent 6 -}}
+      {{ template "app.securityContext.pod" . }}
+      {{- template "app.volumes" . }}
+      {{- template "app.initcontainers" . }}
+      containers:
+        - name: {{ .Release.Name }}
+          image: {{ .Values.deployment.image.repository }}:{{ .Values.deployment.image.tag | default "latest" }}
+          imagePullPolicy: {{ .Values.deployment.image.pullPolicy -}}
+          {{- template "app.securityContext.container" . }}           
+          ports:
+            - name: {{ .Values.service.scheme | quote }} 
+              containerPort: {{ .Values.service.port }}
+          {{- template "app.env" . }}
+          {{- template "app.mounts" . }}
+          {{ template "app.resources" . }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Release.Name }}
+      {{- template "app.affinity" . }}
+      {{- template "app.tolerations" . }}
+      {{- template "app.nodeselector" . }}

@@ -34,25 +34,22 @@ enable_stats = true
 
 [captcha.default_difficulty_strategy]
 avg_traffic_difficulty =  50000 # almost instant solution
+avg_traffic_time =  1 # almost instant solution
 peak_sustainable_traffic_difficulty = 3000000 # roughly 1.5s
+peak_sustainable_traffic_time = 3
 broke_my_site_traffic_difficulty = 5000000  # greater than 3.5s
+broke_my_site_traffic_time = 5
 duration = 30 # cooldown period in seconds
 
 [database]
 # This section deals with the database location and how to access it
 # Please note that at the moment, we have support for only postgresqa.
 # Example, if you are Batman, your config would be:
-# hostname = "batcave.org"
-# port = "5432"
-# username = "batman"
-# password = "somereallycomplicatedBatmanpassword"
-hostname = "localhost"
-port = "5432"
-username = "postgres"
-password = "password"
-name = "postgres"
+# url = "postgres://batman:password@batcave.org:5432/batcave"
+# database_type = "postgres"
+# pool = 4
+url = "postgres://example.org" # hack for tests to run successfully
 pool = 4
-database_type="postgres" # "postgres", "maria"
 
 [redis]
 # This section deals with the database location and how to access it
@@ -72,3 +69,8 @@ url = "127.0.0.1"
 port = 10025
 username = "admin"
 password = "password"
+
+#[survey]
+#nodes = ["http://localhost:7001"]
+#rate_limit = 10 # upload every hour
+#instance_root_url = "http://localhost:7000"

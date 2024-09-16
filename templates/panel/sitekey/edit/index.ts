@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import * as Add from "../add/advance/ts/form/";
 import addLevelButtonAddEventListener from "../add/advance/ts/addLevelButton";
 import { addRemoveLevelButtonEventListenerAll } from "../add/advance/ts/removeLevelButton";
@@ -47,11 +36,19 @@ const submit = async (e: Event) => {
 
   const key = BTN.get().dataset.sitekey;
 
+
+  const PUBLISH_BENCHMARKS = <HTMLInputElement>(
+    Add.FORM.querySelector("#publish_benchmarks")
+  );
+
+
+
   const payload = {
     levels,
     duration,
     description,
     key,
+    publish_benchmarks: PUBLISH_BENCHMARKS.checked,
   };
 
   console.debug(`[form submition] json payload: ${JSON.stringify(payload)}`);

@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use actix_identity::Identity;
 use actix_web::{web, HttpResponse, Responder};
 use libmcaptcha::defense::Level;
@@ -76,6 +65,7 @@ pub struct UpdateCaptcha {
     pub duration: u32,
     pub description: String,
     pub key: String,
+    pub publish_benchmarks: bool,
 }
 
 #[my_codegen::post(
@@ -138,6 +128,16 @@ pub mod runner {
                 &payload.key,
                 e
             );
+        }
+
+        if payload.publish_benchmarks {
+            data.db
+                .analytics_create_psuedo_id_if_not_exists(&payload.key)
+                .await?;
+        } else {
+            data.db
+                .analytics_delete_all_records_for_campaign(&payload.key)
+                .await?;
         }
         Ok(())
     }

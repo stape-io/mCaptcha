@@ -1,13 +1,8 @@
-/*
- * mCaptcha is a PoW based DoS protection software.
- * This is the frontend web component of the mCaptcha system
- * Copyright © 2021 Aravinth Manivnanan <realaravinth@batsense.net>.
- *
- * Use of this source code is governed by Apache 2.0 or MIT license.
- * You shoud have received a copy of MIT and Apache 2.0 along with
- * this program. If not, see <https://spdx.org/licenses/MIT.html> for
- * MIT or <http://www.apache.org/licenses/LICENSE-2.0> for Apache.
- */
+// Copyright © 2021 Aravinth Manivnanan <realaravinth@batsense.net>.
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 import LazyElement from "../utils/lazyElement";
 
 /** mcaptcha checkbox ID **/
@@ -61,53 +56,41 @@ type messageTextReturn = {
   error: () => void;
 };
 
-export const messageText = (): messageTextReturn => {
-  const beforeID = "widget__verification-text--before";
-  const duringID = "widget__verification-text--during";
-  const errorID = "widget__verification-text--error";
-  const afterID = "widget__verification-text--after";
+export const BEFORE = "I'm not a robot";
+export const DURING = "Processing...";
+export const AFTER = "Verified!";
+export const ERROR = "Something went wrong";
 
-  const before = new LazyElement(beforeID);
-  const after = new LazyElement(afterID);
-  const during = new LazyElement(duringID);
-  const error = new LazyElement(errorID);
+export const messageText = (): messageTextReturn => {
+  const conatinerID = "widget__verification-text";
+
+  const container = new LazyElement(conatinerID);
 
   /** runner fn to display HTMLElement **/
-  const showMsg = (e: HTMLElement) => (e.style.display = "block");
-  /** runner fn to hide HTMLElement **/
-  const hideMsg = (e: HTMLElement) => (e.style.display = "none");
+  const showMsg = (value: string) => {
+    container.get().innerText = value;
+    btn().ariaValueText = value;
+  };
 
   return {
     /** display "before" message **/
     before: () => {
-      showMsg(before.get());
-      hideMsg(after.get());
-      hideMsg(during.get());
-      hideMsg(error.get());
+      showMsg(BEFORE);
     },
 
     /** display "after" message **/
     after: () => {
-      hideMsg(before.get());
-      showMsg(after.get());
-      hideMsg(during.get());
-      hideMsg(error.get());
+      showMsg(AFTER);
     },
 
     /** display "during" message **/
     during: () => {
-      hideMsg(before.get());
-      hideMsg(after.get());
-      showMsg(during.get());
-      hideMsg(error.get());
+      showMsg(DURING);
     },
 
     /** display "error" message **/
     error: () => {
-      hideMsg(before.get());
-      hideMsg(after.get());
-      hideMsg(during.get());
-      showMsg(error.get());
+      showMsg(ERROR);
     },
   };
 };

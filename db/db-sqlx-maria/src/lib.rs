@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::str::FromStr;
 
 use db_core::dev::*;
@@ -22,6 +11,7 @@ use sqlx::mysql::MySqlPoolOptions;
 use sqlx::types::time::OffsetDateTime;
 use sqlx::ConnectOptions;
 use sqlx::MySqlPool;
+use uuid::Uuid;
 
 pub mod errors;
 #[cfg(test)]
@@ -53,13 +43,11 @@ pub mod dev {
     pub use super::errors::*;
     pub use super::Database;
     pub use db_core::dev::*;
-    pub use prelude::*;
     pub use sqlx::Error;
 }
 
 pub mod prelude {
     pub use super::*;
-    pub use db_core::prelude::*;
 }
 
 #[async_trait]
@@ -71,7 +59,7 @@ impl Connect for ConnectionOptions {
                 let mut connect_options =
                     sqlx::mysql::MySqlConnectOptions::from_str(&fresh.url).unwrap();
                 if fresh.disable_logging {
-                    connect_options.disable_statement_logging();
+                    connect_options = connect_options.disable_statement_logging();
                 }
                 fresh
                     .pool_options
@@ -439,6 +427,39 @@ impl MCDatabase for Database {
                 visitor_threshold,
                 &captcha_key,
                 username,
+            )
+            .execute(&self.pool);
+            futs.push(fut);
+        }
+
+        try_join_all(futs)
+            .await
+            .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        let mut futs = Vec::with_capacity(levels.len());
+
+        for level in levels.iter() {
+            let difficulty_factor = level.difficulty_factor as i32;
+            let visitor_threshold = level.visitor_threshold as i32;
+            let fut = sqlx::query!(
+                "INSERT INTO
+                    mcaptcha_track_nonce (level_id, nonce)
+                VALUES  ((
+                    SELECT
+                        level_id
+                    FROM
+                        mcaptcha_levels
+                    WHERE
+                        config_id = (SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?)
+                    AND
+                        difficulty_factor = ?
+                    AND
+                        visitor_threshold = ?
+                    ), ?);",
+                &captcha_key,
+                difficulty_factor,
+                visitor_threshold,
+                0,
             )
             .execute(&self.pool);
             futs.push(fut);
@@ -895,6 +916,423 @@ impl MCDatabase for Database {
 
         Ok(Date::dates_to_unix(records))
     }
+
+    /// record PoW timing
+    async fn analysis_save(
+        &self,
+        captcha_id: &str,
+        d: &CreatePerformanceAnalytics,
+    ) -> DBResult<()> {
+        let _ = sqlx::query!(
+            "INSERT INTO mcaptcha_pow_analytics 
+            (config_id, time, difficulty_factor, worker_type)
+        VALUES ((SELECT config_id FROM mcaptcha_config where captcha_key= ?), ?, ?, ?)",
+            captcha_id,
+            d.time as i32,
+            d.difficulty_factor as i32,
+            &d.worker_type,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+        Ok(())
+    }
+
+    /// fetch PoW analytics
+    async fn analytics_fetch(
+        &self,
+        captcha_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> DBResult<Vec<PerformanceAnalytics>> {
+        struct P {
+            id: i32,
+            time: i32,
+            difficulty_factor: i32,
+            worker_type: String,
+        }
+
+        impl From<P> for PerformanceAnalytics {
+            fn from(v: P) -> Self {
+                Self {
+                    id: v.id as usize,
+                    time: v.time as u32,
+                    difficulty_factor: v.difficulty_factor as u32,
+                    worker_type: v.worker_type,
+                }
+            }
+        }
+
+        let mut c = sqlx::query_as!(
+            P,
+            "SELECT
+                id, time, difficulty_factor, worker_type
+            FROM
+                mcaptcha_pow_analytics
+            WHERE
+                config_id = (
+                    SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?
+                ) 
+            ORDER BY ID
+            LIMIT ? OFFSET ?",
+            &captcha_id,
+            limit as i64,
+            offset as i64,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+        let mut res = Vec::with_capacity(c.len());
+        for i in c.drain(0..) {
+            res.push(i.into())
+        }
+
+        Ok(res)
+    }
+
+    /// Create psuedo ID against campaign ID to publish analytics
+    async fn analytics_create_psuedo_id_if_not_exists(
+        &self,
+        captcha_id: &str,
+    ) -> DBResult<()> {
+        let id = Uuid::new_v4();
+        sqlx::query!(
+            "
+            INSERT INTO
+                mcaptcha_psuedo_campaign_id (config_id, psuedo_id)
+            VALUES (
+                (SELECT config_id FROM mcaptcha_config WHERE captcha_key = (?)),
+                ?
+            );",
+            captcha_id,
+            &id.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        Ok(())
+    }
+
+    /// Get psuedo ID from campaign ID
+    async fn analytics_get_psuedo_id_from_capmaign_id(
+        &self,
+        captcha_id: &str,
+    ) -> DBResult<String> {
+        let res = sqlx::query_as!(
+            PsuedoID,
+            "SELECT psuedo_id FROM
+                mcaptcha_psuedo_campaign_id
+            WHERE
+                 config_id = (SELECT config_id FROM mcaptcha_config WHERE captcha_key = (?));
+            ",
+            captcha_id
+        ).fetch_one(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        Ok(res.psuedo_id)
+    }
+
+    /// Get campaign ID from psuedo ID
+    async fn analytics_get_capmaign_id_from_psuedo_id(
+        &self,
+        psuedo_id: &str,
+    ) -> DBResult<String> {
+        struct ID {
+            captcha_key: String,
+        }
+
+        let res = sqlx::query_as!(
+            ID,
+            "SELECT
+                captcha_key
+            FROM
+                mcaptcha_config
+            WHERE
+                 config_id = (
+                     SELECT
+                         config_id
+                     FROM
+                         mcaptcha_psuedo_campaign_id
+                     WHERE
+                         psuedo_id = ?
+                 );",
+            psuedo_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+        Ok(res.captcha_key)
+    }
+
+    async fn analytics_delete_all_records_for_campaign(
+        &self,
+        campaign_id: &str,
+    ) -> DBResult<()> {
+        let _ = sqlx::query!(
+            "
+        DELETE FROM
+            mcaptcha_psuedo_campaign_id
+        WHERE config_id = (
+            SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?
+        );",
+            campaign_id
+        )
+        .execute(&self.pool)
+        .await;
+
+        let _ = sqlx::query!(
+            "
+            DELETE FROM
+                mcaptcha_pow_analytics
+            WHERE
+                config_id = (
+                    SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?
+            ) ",
+            campaign_id
+        )
+        .execute(&self.pool)
+        .await;
+
+        Ok(())
+    }
+    /// Get all psuedo IDs
+    async fn analytics_get_all_psuedo_ids(&self, page: usize) -> DBResult<Vec<String>> {
+        const LIMIT: usize = 50;
+        let offset = LIMIT * page;
+
+        let mut res = sqlx::query_as!(
+            PsuedoID,
+            "
+                SELECT
+                    psuedo_id
+                FROM
+                    mcaptcha_psuedo_campaign_id
+                    ORDER BY ID ASC LIMIT ? OFFSET ?;",
+            LIMIT as i64,
+            offset as i64
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        Ok(res.drain(0..).map(|r| r.psuedo_id).collect())
+    }
+
+    /// Track maximum nonce received against captcha levels
+    async fn update_max_nonce_for_level(
+        &self,
+        captcha_key: &str,
+        difficulty_factor: u32,
+        latest_nonce: u32,
+    ) -> DBResult<()> {
+        let latest_nonce = latest_nonce as i64;
+        sqlx::query!(
+                "UPDATE mcaptcha_track_nonce SET nonce = ?
+                WHERE level_id =  (
+                    SELECT
+                        level_id
+                    FROM
+                        mcaptcha_levels
+                    WHERE
+                        config_id = (SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?)
+                    AND
+                        difficulty_factor = ?
+                    )
+                AND nonce <= ?;",
+                latest_nonce,
+                &captcha_key,
+                difficulty_factor as i64,
+                latest_nonce
+            )
+            .execute(&self.pool).await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        Ok(())
+    }
+
+    /// Get maximum nonce tracked so far for captcha levels
+    async fn get_max_nonce_for_level(
+        &self,
+        captcha_key: &str,
+        difficulty_factor: u32,
+    ) -> DBResult<u32> {
+        struct X {
+            nonce: i32,
+        }
+
+        async fn inner_get_max_nonce(
+            pool: &MySqlPool,
+            captcha_key: &str,
+            difficulty_factor: u32,
+        ) -> DBResult<X> {
+            sqlx::query_as!(
+                X,
+                "SELECT nonce FROM mcaptcha_track_nonce
+                WHERE level_id =  (
+                    SELECT
+                        level_id
+                    FROM
+                        mcaptcha_levels
+                    WHERE
+                        config_id = (SELECT config_id FROM mcaptcha_config WHERE captcha_key = ?)
+                    AND
+                        difficulty_factor = ?
+                    );",
+                &captcha_key,
+                difficulty_factor as i32,
+            )
+                .fetch_one(pool).await
+                .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))
+        }
+
+        let res = inner_get_max_nonce(&self.pool, captcha_key, difficulty_factor).await;
+        if let Err(DBError::CaptchaNotFound) = res {
+            sqlx::query!(
+                "INSERT INTO
+                    mcaptcha_track_nonce (level_id, nonce)
+                VALUES  ((
+                    SELECT
+                        level_id
+                    FROM
+                        mcaptcha_levels
+                    WHERE
+                        config_id = (SELECT config_id FROM mcaptcha_config WHERE captcha_key =?)
+                    AND
+                        difficulty_factor = ?
+                    ), ?);",
+                &captcha_key,
+                difficulty_factor as i32,
+                0,
+            )
+            .execute(&self.pool)
+            .await
+                .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+            let res =
+                inner_get_max_nonce(&self.pool, captcha_key, difficulty_factor).await?;
+            Ok(res.nonce as u32)
+        } else {
+            let res = res?;
+            Ok(res.nonce as u32)
+        }
+    }
+
+    /// Get number of analytics entries that are under a certain duration
+    async fn stats_get_num_logs_under_time(&self, duration: u32) -> DBResult<usize> {
+        struct Count {
+            count: Option<i64>,
+        }
+
+        //"SELECT COUNT(*) FROM (SELECT difficulty_factor FROM mcaptcha_pow_analytics WHERE time <= ?) as count",
+        let count = sqlx::query_as!(
+            Count,
+            "SELECT
+                COUNT(difficulty_factor) AS count
+            FROM
+                mcaptcha_pow_analytics
+            WHERE time <= ?;",
+            duration as i32,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::CaptchaNotFound))?;
+
+        Ok(count.count.unwrap_or_else(|| 0) as usize)
+    }
+
+    /// Get the entry at a location in the list of analytics entires under a certain time limited
+    /// and sorted in ascending order
+    async fn stats_get_entry_at_location_for_time_limit_asc(
+        &self,
+        duration: u32,
+        location: u32,
+    ) -> DBResult<Option<usize>> {
+        struct Difficulty {
+            difficulty_factor: Option<i32>,
+        }
+
+        match sqlx::query_as!(
+            Difficulty,
+            "SELECT
+            difficulty_factor
+        FROM
+            mcaptcha_pow_analytics
+        WHERE
+            time <= ?
+        ORDER BY difficulty_factor ASC LIMIT 1 OFFSET ?;",
+            duration as i32,
+            location as i64 - 1,
+        )
+        .fetch_one(&self.pool)
+        .await
+        {
+            Ok(res) => Ok(Some(res.difficulty_factor.unwrap() as usize)),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
+            Err(e) => Err(map_row_not_found_err(e, DBError::CaptchaNotFound)),
+        }
+    }
+
+    /// Get all easy captcha configurations on instance
+    async fn get_all_easy_captchas(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> DBResult<Vec<EasyCaptcha>> {
+        struct InnerEasyCaptcha {
+            captcha_key: String,
+            name: String,
+            username: String,
+            peak_sustainable_traffic: i32,
+            avg_traffic: i32,
+            broke_my_site_traffic: Option<i32>,
+        }
+        let mut inner_res = sqlx::query_as!(
+            InnerEasyCaptcha,
+                "SELECT 
+              mcaptcha_sitekey_user_provided_avg_traffic.avg_traffic, 
+              mcaptcha_sitekey_user_provided_avg_traffic.peak_sustainable_traffic, 
+              mcaptcha_sitekey_user_provided_avg_traffic.broke_my_site_traffic,
+              mcaptcha_config.name,
+              mcaptcha_users.name as username,
+              mcaptcha_config.captcha_key
+            FROM 
+              mcaptcha_sitekey_user_provided_avg_traffic 
+            INNER JOIN
+                mcaptcha_config
+            ON
+                mcaptcha_config.config_id = mcaptcha_sitekey_user_provided_avg_traffic.config_id
+            INNER JOIN
+                mcaptcha_users
+            ON
+                mcaptcha_config.user_id = mcaptcha_users.ID
+            ORDER BY mcaptcha_config.config_id
+            LIMIT ? OFFSET ?",
+            limit as i64,
+            offset as i64
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| map_row_not_found_err(e, DBError::TrafficPatternNotFound))?;
+        let mut res = Vec::with_capacity(inner_res.len());
+        inner_res.drain(0..).for_each(|v| {
+            res.push(EasyCaptcha {
+                key: v.captcha_key,
+                description: v.name,
+                username: v.username,
+                traffic_pattern: TrafficPattern {
+                    broke_my_site_traffic: v
+                        .broke_my_site_traffic
+                        .as_ref()
+                        .map(|v| *v as u32),
+                    avg_traffic: v.avg_traffic as u32,
+                    peak_sustainable_traffic: v.peak_sustainable_traffic as u32,
+                },
+            })
+        });
+        Ok(res)
+    }
 }
 
 #[derive(Clone)]
@@ -959,4 +1397,8 @@ impl From<InternaleCaptchaConfig> for Captcha {
             key: i.captcha_key,
         }
     }
+}
+
+struct PsuedoID {
+    psuedo_id: String,
 }

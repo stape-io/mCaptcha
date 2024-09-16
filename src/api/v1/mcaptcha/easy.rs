@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use actix_identity::Identity;
 use actix_web::{web, HttpResponse, Responder};
 use libmcaptcha::{defense::Level, defense::LevelBuilder};
@@ -60,6 +49,9 @@ pub struct TrafficPatternRequest {
     pub broke_my_site_traffic: Option<u32>,
     /// Captcha description
     pub description: String,
+
+    /// publish benchmarks
+    pub publish_benchmarks: bool,
 }
 
 impl From<&TrafficPatternRequest> for TrafficPattern {
@@ -109,6 +101,79 @@ pub fn calculate(
     Ok(levels)
 }
 
+async fn calculate_with_percentile(
+    data: &AppData,
+    tp: &TrafficPattern,
+) -> ServiceResult<Option<Vec<Level>>> {
+    use crate::api::v1::stats::{percentile_bench_runner, PercentileReq};
+
+    let strategy = &data.settings.captcha.default_difficulty_strategy;
+
+    if strategy.avg_traffic_time.is_none()
+        && strategy.peak_sustainable_traffic_time.is_none()
+        && strategy.broke_my_site_traffic_time.is_none()
+    {
+        return Ok(None);
+    }
+
+    let mut req = PercentileReq {
+        time: strategy.avg_traffic_time.unwrap(),
+        percentile: 90.00,
+    };
+    let resp = percentile_bench_runner(data, &req).await?;
+    if resp.difficulty_factor.is_none() {
+        return Ok(None);
+    }
+    let avg_traffic_difficulty = resp.difficulty_factor.unwrap();
+
+    req.time = strategy.peak_sustainable_traffic_time.unwrap();
+    let resp = percentile_bench_runner(data, &req).await?;
+    if resp.difficulty_factor.is_none() {
+        return Ok(None);
+    }
+    let peak_sustainable_traffic_difficulty = resp.difficulty_factor.unwrap();
+
+    req.time = strategy.broke_my_site_traffic_time.unwrap();
+    let resp = percentile_bench_runner(data, &req).await?;
+    let broke_my_site_traffic_difficulty = if resp.difficulty_factor.is_none() {
+        resp.difficulty_factor.unwrap()
+    } else {
+        peak_sustainable_traffic_difficulty * 2
+    };
+
+    let mut levels = vec![
+        LevelBuilder::default()
+            .difficulty_factor(avg_traffic_difficulty)?
+            .visitor_threshold(tp.avg_traffic)
+            .build()?,
+        LevelBuilder::default()
+            .difficulty_factor(peak_sustainable_traffic_difficulty)?
+            .visitor_threshold(tp.peak_sustainable_traffic)
+            .build()?,
+    ];
+    let mut highest_level = LevelBuilder::default();
+    highest_level.difficulty_factor(broke_my_site_traffic_difficulty)?;
+
+    match tp.broke_my_site_traffic {
+        Some(broke_my_site_traffic) => {
+            highest_level.visitor_threshold(broke_my_site_traffic)
+        }
+        None => match tp
+            .peak_sustainable_traffic
+            .checked_add(tp.peak_sustainable_traffic / 2)
+        {
+            Some(num) => highest_level.visitor_threshold(num),
+            // TODO check for overflow: database saves these values as i32, so this u32 is cast
+            // into i32. Should choose bigger number or casts properly
+            None => highest_level.visitor_threshold(u32::MAX),
+        },
+    };
+
+    levels.push(highest_level.build()?);
+
+    Ok(Some(levels))
+}
+
 #[my_codegen::post(
     path = "crate::V1_API_ROUTES.captcha.easy.create",
     wrap = "crate::api::v1::get_middleware()"
@@ -121,18 +186,24 @@ async fn create(
     let username = id.identity().unwrap();
     let payload = payload.into_inner();
     let pattern = (&payload).into();
-    let levels =
-        calculate(&pattern, &data.settings.captcha.default_difficulty_strategy)?;
+    let levels = if let Some(levels) = calculate_with_percentile(&data, &pattern).await?
+    {
+        levels
+    } else {
+        calculate(&pattern, &data.settings.captcha.default_difficulty_strategy)?
+    };
     let msg = CreateCaptcha {
         levels,
         duration: data.settings.captcha.default_difficulty_strategy.duration,
         description: payload.description,
+        publish_benchmarks: payload.publish_benchmarks,
     };
 
     let mcaptcha_config = create_runner(&msg, &data, &username).await?;
     data.db
         .add_traffic_pattern(&username, &mcaptcha_config.key, &pattern)
         .await?;
+
     Ok(HttpResponse::Ok().json(mcaptcha_config))
 }
 
@@ -153,6 +224,15 @@ async fn update(
 ) -> ServiceResult<impl Responder> {
     let username = id.identity().unwrap();
     let payload = payload.into_inner();
+    update_runner(&data, payload, username).await?;
+    Ok(HttpResponse::Ok())
+}
+
+pub async fn update_runner(
+    data: &AppData,
+    payload: UpdateTrafficPattern,
+    username: String,
+) -> ServiceResult<()> {
     let pattern = (&payload.pattern).into();
     let levels =
         calculate(&pattern, &data.settings.captcha.default_difficulty_strategy)?;
@@ -162,6 +242,7 @@ async fn update(
         duration: data.settings.captcha.default_difficulty_strategy.duration,
         description: payload.pattern.description,
         key: payload.key,
+        publish_benchmarks: payload.pattern.publish_benchmarks,
     };
 
     update_captcha_runner(&msg, &data, &username).await?;
@@ -172,7 +253,7 @@ async fn update(
         .add_traffic_pattern(&username, &msg.key, &pattern)
         .await?;
 
-    Ok(HttpResponse::Ok())
+    Ok(())
 }
 
 #[cfg(test)]
@@ -292,6 +373,7 @@ pub mod tests {
             peak_sustainable_traffic: 1_000_000,
             broke_my_site_traffic: Some(10_000_000),
             description: NAME.into(),
+            publish_benchmarks: false,
         };
 
         let default_levels = calculate(
@@ -323,6 +405,11 @@ pub mod tests {
         assert_eq!(get_level_resp.status(), StatusCode::OK);
         let res_levels: Vec<Level> = test::read_body_json(get_level_resp).await;
         assert_eq!(res_levels, default_levels);
+        assert!(!data
+            .db
+            .analytics_captcha_is_published(&token_key.key)
+            .await
+            .unwrap());
         // END create_easy
 
         // START update_easy
@@ -331,6 +418,7 @@ pub mod tests {
             peak_sustainable_traffic: 10_000,
             broke_my_site_traffic: Some(1_000_000),
             description: NAME.into(),
+            publish_benchmarks: true,
         };
 
         let updated_default_values = calculate(
@@ -352,6 +440,11 @@ pub mod tests {
         )
         .await;
         assert_eq!(update_token_resp.status(), StatusCode::OK);
+        assert!(data
+            .db
+            .analytics_captcha_is_published(&token_key.key)
+            .await
+            .unwrap());
 
         let get_level_resp = test::call_service(
             &app,
@@ -394,5 +487,52 @@ pub mod tests {
         ));
         assert!(body.contains(&payload.pattern.avg_traffic.to_string()));
         assert!(body.contains(&payload.pattern.peak_sustainable_traffic.to_string()));
+
+        // START update_easy to delete published results
+        let mut payload2 = TrafficPatternRequest {
+            avg_traffic: 100_000,
+            peak_sustainable_traffic: 1_000_000,
+            broke_my_site_traffic: Some(10_000_000),
+            description: NAME.into(),
+            publish_benchmarks: true,
+        };
+
+        let add_token_resp = test::call_service(
+            &app,
+            post_request!(&payload2, ROUTES.captcha.easy.create)
+                .cookie(cookies.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(add_token_resp.status(), StatusCode::OK);
+
+        assert!(data
+            .db
+            .analytics_captcha_is_published(&token_key.key)
+            .await
+            .unwrap());
+
+        let token_key2: MCaptchaDetails = test::read_body_json(add_token_resp).await;
+
+        payload2.publish_benchmarks = false;
+
+        let payload = UpdateTrafficPattern {
+            pattern: payload2,
+            key: token_key2.key.clone(),
+        };
+
+        let update_token_resp = test::call_service(
+            &app,
+            post_request!(&payload, ROUTES.captcha.easy.update)
+                .cookie(cookies.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(update_token_resp.status(), StatusCode::OK);
+        assert!(!data
+            .db
+            .analytics_captcha_is_published(&token_key2.key)
+            .await
+            .unwrap());
     }
 }

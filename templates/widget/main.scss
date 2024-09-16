@@ -1,122 +1,146 @@
 /*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+ * Copyright © 2023 Aravinth Manivnanan <realaravinth@batsense.net>.
+ * SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-@import '../reset';
+@import "../reset";
 
-.widget__contaienr {
-  align-items: center;
-  box-sizing: border-box;
-  display: flex;
-  height: 100%;
+body {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+}
+
+.widget__container {
+	align-items: center;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	margin: auto 0;
+}
+
+.widget__inner-container {
+	align-items: center;
+	box-sizing: border-box;
+	display: flex;
+	height: 100%;
+	width: 100%;
+	background-color: #f6f6f6;
+	border: 2px solid #e5e5e5;
 }
 
 .widget__noscript-container {
-  display: flex;
-  font-size: 0.7rem;
-  line-height: 20px;
-  flex-direction: column;
-  padding: 5px;
-  box-sizing: border-box;
-  height: 100%;
-  margin: auto;
+	display: flex;
+	font-size: 0.7rem;
+	line-height: 20px;
+	flex-direction: column;
+	padding: 5px;
+	box-sizing: border-box;
+	height: 100%;
+	margin: auto;
 }
 
 .widget__noscript-warning {
-  display: block;
-  margin: auto;
-  flex: 2;
-  width: 100%;
-  margin: auto;
+	display: block;
+	margin: auto;
+	flex: 2;
+	width: 100%;
+	margin: auto;
 }
 
 .widget__source-code {
-  display: block;
-  flex: 1;
+	display: block;
+	flex: 1;
 }
 
 .widget__verification-container {
-  align-items: center;
-  display: none;
-  line-height: 30px;
-  font-size: 1rem;
+	align-items: center;
+	display: flex;
+	flex-direction: row-reverse;
+	line-height: 30px;
+	font-size: 1rem;
 }
 
 .widget__verification-checkbox {
-  width: 30px;
-  height: 30px;
-  margin: 0 10px;
-}
-
-#widget__verification-text--during {
-  display: none;
-}
-
-#widget__verification-text--after {
-  display: none;
-  color: green;
-}
-
-#widget__verification-text--error {
-  display: none;
-  color: red;
-}
-
-.widget__verification-checkbox:checked ~ #widget__verification-text--before {
-  display: none;
-}
-
-.widget__verification-checkbox:checked ~ #widget__verification-text--during {
-  display: none;
-}
-
-.widget__verification-checkbox:checked ~ #widget__verification-text--error {
-  display: none;
-}
-
-.widget__verification-checkbox:checked ~ #widget__verification-text--after {
-  display: block;
+	width: 30px;
+	height: 30px;
+	margin: 0 10px;
 }
 
 .widget__mcaptcha-details {
-  display: flex;
-  flex-direction: column;
-  margin-left: auto;
-  margin-right: 10px;
+	display: flex;
+	flex-direction: column;
+	margin-left: auto;
+	margin-right: 10px;
 }
 
 .widget__mcaptcha-brand-name {
-  font-size: 0.7rem;
-  font-weight: 600;
-  margin: auto;
-  text-align: center;
+	font-size: 0.7rem;
+	font-weight: 600;
+	margin: auto;
+	text-align: center;
 }
 
 .widget__mcaptcha-logo {
-  display: block;
-  width: 35px;
-  margin: auto;
+	display: block;
+	width: 35px;
+	margin: auto;
 }
 
 .widget__mcaptcha-info-container {
-  display: flex;
-  margin: auto;
+	display: flex;
+	margin: auto;
 }
 
 .widget__mcaptcha-info-link {
-  font-size: 0.5rem;
-  margin: 2px;
+	font-size: 0.5rem;
+	margin: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+	.widget__container {
+		background-color: #1c1c1c;
+	}
+
+	.widget__inner-container {
+		background-color: #1c1c1c;
+		border: 2px solid #656569;
+	}
+
+	.widget__verification-container {
+		color: rgb(232, 230, 227);
+	}
+
+	.widget__mcaptcha-brand-name {
+		color: #7d94f9;
+	}
+
+	.widget__mcaptcha-info-link {
+		color: #7d94f9;
+	}
+}
+
+/* progress bar courtesy of https://codepen.io/Bizzy-Coding/pen/poOymVJ?editors=1111 */
+.progress__bar {
+	position: relative;
+	height: 5px;
+	width: 100%;
+	background: #fff;
+	border-radius: 15px;
+}
+
+.progress__fill {
+	background: #65a2e0;
+	border-radius: 15px;
+	height: 100%;
+	width: 0%;
+}
+
+@media (prefers-color-scheme: dark) {
+	.progress__bar {
+		background: unset;
+	}
 }

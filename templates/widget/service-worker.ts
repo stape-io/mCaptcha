@@ -18,20 +18,36 @@ import prove from "./prove";
 import {PoWConfig, ServiceWorkerWork} from "./types";
 import log from "../logger";
 
+import prove from "./prove";
+import { PoWConfig, ServiceWorkerMessage, ServiceWorkerWork } from "./types";
+
 log.log("worker registered");
+
+const ready: ServiceWorkerMessage = {
+  type: "ready",
+};
+postMessage(ready);
+
 onmessage = async (e) => {
   console.debug("message received at worker");
   const config: PoWConfig = e.data;
 
-  const t0 = performance.now();
-  const work = await prove(config);
+  const progressCallback = (nonce: number) => {
+    const res: ServiceWorkerMessage = {
+      type: "progress",
+      nonce: nonce,
+    };
 
-  const t1 = performance.now();
-  const duration = t1 - t0;
+    postMessage(res);
+  };
 
   const payload: ServiceWorkerWork = {
     work,
-    duration,
+  };
+
+  const res: ServiceWorkerMessage = {
+    type: "work",
+    value: w,
   };
 
   postMessage({type: 'result', payload});

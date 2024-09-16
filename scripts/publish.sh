@@ -1,18 +1,9 @@
 #!/bin/bash
+
 # Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-# 
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # publish.sh: grab bin from docker container, pack, sign and upload
 # $2: binary version
@@ -26,7 +17,7 @@ DUMBSERVE_PASSWORD=$4
 DUMBSERVE_HOST="https://$DUMBSERVE_USERNAME:$DUMBSERVE_PASSWORD@dl.mcaptcha.org"
 
 NAME=mcaptcha
-KEY=0CBABF3084E84E867A76709750BE39D10ECE01FB
+KEY=73DAC973A9ADBB9ADCB5CDC4595A08135BA9FF73
 
 TMP_DIR=$(mktemp -d)
 FILENAME="$NAME-$2-linux-amd64"
@@ -53,6 +44,7 @@ copy() {
 	mkdir $TARGET_DIR/docs
 	cp docs/DEPLOYMENT.md $TARGET_DIR/docs
 	cp docs/CONFIGURATION.md $TARGET_DIR/docs
+	cp config/default.toml $TARGET_DIR/config.toml
 
 	get_bin
 }

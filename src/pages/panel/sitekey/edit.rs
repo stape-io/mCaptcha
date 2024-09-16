@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use actix_identity::Identity;
 use actix_web::{http, web, HttpResponse, Responder};
 use sailfish::TemplateOnce;
@@ -35,15 +24,22 @@ struct AdvanceEditPage {
     name: String,
     key: String,
     levels: Vec<Level>,
+    publish_benchmarks: bool,
 }
 
 impl AdvanceEditPage {
-    fn new(config: Captcha, levels: Vec<Level>, key: String) -> Self {
+    fn new(
+        config: Captcha,
+        levels: Vec<Level>,
+        key: String,
+        publish_benchmarks: bool,
+    ) -> Self {
         AdvanceEditPage {
             duration: config.duration as u32,
             name: config.description,
             levels,
             key,
+            publish_benchmarks,
         }
     }
 }
@@ -63,8 +59,9 @@ pub async fn advance(
 
     let config = data.db.get_captcha_config(&username, &key).await?;
     let levels = data.db.get_captcha_levels(Some(&username), &key).await?;
+    let publish_benchmarks = data.db.analytics_captcha_is_published(&key).await?;
 
-    let body = AdvanceEditPage::new(config, levels, key)
+    let body = AdvanceEditPage::new(config, levels, key, publish_benchmarks)
         .render_once()
         .unwrap();
     Ok(HttpResponse::Ok()
@@ -106,11 +103,14 @@ pub async fn easy(
     match data.db.get_traffic_pattern(&username, &key).await {
         Ok(c) => {
             let config = data.db.get_captcha_config(&username, &key).await?;
+            let publish_benchmarks =
+                data.db.analytics_captcha_is_published(&key).await?;
             let pattern = TrafficPatternRequest {
-                peak_sustainable_traffic: c.peak_sustainable_traffic as u32,
-                avg_traffic: c.avg_traffic as u32,
-                broke_my_site_traffic: c.broke_my_site_traffic.map(|n| n as u32),
+                peak_sustainable_traffic: c.peak_sustainable_traffic,
+                avg_traffic: c.avg_traffic,
+                broke_my_site_traffic: c.broke_my_site_traffic,
                 description: config.description,
+                publish_benchmarks,
             };
 
             let page = EasyEditPage::new(key, pattern).render_once().unwrap();

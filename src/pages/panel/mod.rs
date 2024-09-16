@@ -1,19 +1,7 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use actix_identity::Identity;
 use actix_web::{HttpResponse, Responder};
@@ -22,6 +10,7 @@ use sailfish::TemplateOnce;
 mod notifications;
 mod settings;
 pub mod sitekey;
+mod utils;
 
 use db_core::Captcha;
 
@@ -59,18 +48,21 @@ pub fn services(cfg: &mut actix_web::web::ServiceConfig) {
     cfg.service(panel);
     settings::services(cfg);
     sitekey::services(cfg);
+    utils::services(cfg);
     cfg.service(notifications::notifications);
 }
 
 pub mod routes {
     use super::settings::routes::Settings;
     use super::sitekey::routes::Sitekey;
+    use super::utils::routes::Utils;
 
     pub struct Panel {
         pub home: &'static str,
         pub sitekey: Sitekey,
         pub notifications: &'static str,
         pub settings: Settings,
+        pub utils: Utils,
     }
 
     impl Panel {
@@ -80,10 +72,11 @@ pub mod routes {
                 sitekey: Sitekey::new(),
                 notifications: "/notifications",
                 settings: Settings::new(),
+                utils: Utils::new(),
             }
         }
 
-        pub const fn get_sitemap() -> [&'static str; 5] {
+        pub const fn get_sitemap() -> [&'static str; 6] {
             const PANEL: Panel = Panel::new();
             const S: [&str; 2] = Sitekey::get_sitemap();
 
@@ -93,6 +86,7 @@ pub mod routes {
                 S[0],
                 S[1],
                 Settings::get_sitemap()[0],
+                Utils::get_sitemap()[0],
             ]
         }
     }

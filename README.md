@@ -32,18 +32,18 @@ yourself!](https://demo.mcaptcha.org/widget/?sitekey=pHy0AktWyOKuxZDzFfoaewncWec
 
 ## How does it work?
 
-mCaptcha uses SHA256 based proof-of-work(PoW) to rate limit users.
+mCaptcha uses SHA256 based proof-of-work (PoW) to rate limit users.
 
-When a user wants to do something on an mCaptcha-protected website,
+When a user wants to do something on a mCaptcha-protected website,
 
-1. they will have to generate proof-of-work(a bunch of math that will takes
+1. they will have to generate proof-of-work (a bunch of math that will takes
    time to compute) and submit it to mCaptcha.
 
 2. We'll validate the proof:
 
-   - **if validation is unsuccessful**, they will be prevented from
-     accessing their target website
-   - **if validation is successful**, read on,
+    - **if validation is unsuccessful**, they will be prevented from
+      accessing their target website
+    - **if validation is successful**, read on,
 
 3. They will be issued a token that they should submit along
    with their request/form submission to the target website.
@@ -54,8 +54,8 @@ When a user wants to do something on an mCaptcha-protected website,
 The whole process is automated from the user's POV. All they have to do
 is click on a button to initiate the process.
 
-mCaptcha makes interacting with websites (computationally)expensive for
-the user. A well-behaving user will experience a slight delay(no delay
+mCaptcha makes interacting with websites (computationally) expensive for
+the user. A well-behaving user will experience a slight delay (no delay
 when under moderate load to 2s when under attack; PoW difficulty is
 variable) but if someone wants to hammer your site, they will have to do
 more work to send requests than your server will have to do to respond
@@ -63,14 +63,14 @@ to their request.
 
 ## Why use mCaptcha?
 
-- [x] **Free software, privacy focused**
-- [x] **Seamless UX** - No more annoying CAPTCHAs!
-- [x] **No tracking:** Our CAPTCHA routes are cookie free!
-- [x] **IP address independent:** your users are behind a NAT? We got you covered!
-- [x] **Resistant to replay attacks:** proof-of-work configurations have
-      short lifetimes(30s) and can be used only once. If a user submits a
-      PoW to an already used configuration or an expired one, their proof
-      will be rejected.
+-   [x] **Free software, privacy focused**
+-   [x] **Seamless UX** - No more annoying CAPTCHAs!
+-   [x] **No tracking:** Our CAPTCHA routes are cookie free!
+-   [x] **IP address independent:** your users are behind a NAT? We got you covered!
+-   [x] **Resistant to replay attacks:** proof-of-work configurations have
+        short lifetimes (30s) and can be used only once. If a user submits a
+        PoW to an already used configuration or an expired one, their proof
+        will be rejected.
 
 ## Demo
 
@@ -87,15 +87,15 @@ monitor console and network activity.
 
 ### Demo servers are available at:
 
-- https://demo.mcaptcha.org/
-- https://demo2.mcaptcha.org/ (runs on a Raspberry Pi!)
+-   https://demo.mcaptcha.org/
+-   https://demo2.mcaptcha.org/ (runs on a Raspberry Pi!)
 
 > Core functionality is working but it's still very much
 > work-in-progress. Since we don't have a stable release yet, hosted
 > demo servers might be a few versions behind `master`. Please check footer for
 > build commit.
 
-Feel free to provide bogus information while signing up(project under
+Feel free to provide bogus information while signing up (project under
 development, database frequently wiped).
 
 ### Self-hosted:
@@ -109,13 +109,12 @@ docker-compose up -d
 
 After the containers are up, visit [http://localhost:7000](http://localhost:7000) and login with the default credentials:
 
-- username: aaronsw 
-- password: password
-
+-   username: aaronsw
+-   password: password
 
 It takes a while to build the image so please be patient :)
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) detailed alternate deployment
+See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed alternate deployment
 methods.
 
 ## Development:
@@ -129,3 +128,21 @@ See [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 ## Configuration:
 
 See [CONFIGURATION.md](./docs/CONFIGURATION.md)
+
+## Funding
+
+### NLnet
+
+<div align="center">
+	<img
+		height="150px"
+		alt="NLnet NGIZero logo"
+		src="./docs/third-party/NGIZero-green.hex.svg"
+	/>
+</div>
+
+<br />
+
+2023 development is funded through the [NGI0 Entrust
+Fund](https://nlnet.nl/entrust), via [NLnet](https://nlnet.nl/). Please
+see [here](https://nlnet.nl/project/mCaptcha/) for more details.

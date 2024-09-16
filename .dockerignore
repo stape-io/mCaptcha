@@ -13,3 +13,4 @@ src/cache_buster_data.json
 browser/target
 browser/cobertura.xml
 browser/docs
+**/target

@@ -18,7 +18,17 @@ import * as CONST from "./const";
 import "./main.scss";
 
 let LOCK = false;
-const worker = new Worker("/bench.js");
+
+const workerPromise = new Promise<Worker>((res) => {
+  const worker = new Worker("/bench.js");
+  worker.onmessage = (event: MessageEvent) => {
+    const message: ServiceWorkerMessage = event.data;
+    if(message.type === "ready") {
+      console.log("worker ready");
+      res(worker);
+    }
+  };
+});
 
 /** add  mcaptcha widget element to DOM */
 export const registerVerificationEventHandler = (): void => {
@@ -37,7 +47,9 @@ export const solveCaptchaRunner = async (): Promise<void> => {
     // 1. show during
     CONST.messageText().during();
     // 1. get config
+
     config = await fetchPoWConfig();
+
     // 2. prove work
     worker.postMessage(config);
   } catch (e) {

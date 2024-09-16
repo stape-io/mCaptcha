@@ -1,41 +1,78 @@
-/*
- * mCaptcha is a PoW based DoS protection software.
- * This is the frontend web component of the mCaptcha system
- * Copyright © 2021 Aravinth Manivnanan <realaravinth@batsense.net>.
- *
- * Use of this source code is governed by Apache 2.0 or MIT license.
- * You shoud have received a copy of MIT and Apache 2.0 along with
- * this program. If not, see <https://spdx.org/licenses/MIT.html> for
- * MIT or <http://www.apache.org/licenses/LICENSE-2.0> for Apache.
- */
+// Copyright © 2021 Aravinth Manivnanan <realaravinth@batsense.net>.
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { gen_pow } from "@mcaptcha/pow-wasm";
+import { stepped_gen_pow } from "@mcaptcha/pow-wasm";
 import * as p from "@mcaptcha/pow_sha256-polyfill";
-import { WasmWork, PoWConfig } from "./types";
+import { WasmWork, PoWConfig, SubmitWork } from "./types";
 
 /**
  * proove work
  * @param {PoWConfig} config - the proof-of-work configuration using which
  * work needs to be computed
  * */
-const prove = async (config: PoWConfig): Promise<WasmWork> => {
-  let proof: WasmWork = null;
+const prove = async (
+  config: PoWConfig,
+  progress: (nonce: number) => void
+): Promise<SubmitWork> => {
+  const WASM = "wasm";
+  const JS = "js";
+  const STEPS = 5000;
   if (WasmSupported) {
-    const proofString = gen_pow(
+    let proof: WasmWork = null;
+    let res: SubmitWork = null;
+    let time: number = null;
+
+    const t0 = performance.now();
+    const proofString = stepped_gen_pow(
       config.salt,
       config.string,
-      config.difficulty_factor
+      config.difficulty_factor,
+      STEPS,
+      (nonce: BigInt | number) => progress(Number(nonce))
     );
+    const t1 = performance.now();
+    time = t1 - t0;
+
     proof = JSON.parse(proofString);
+    const worker_type = WASM;
+    res = {
+      result: proof.result,
+      nonce: proof.nonce,
+      worker_type,
+      time,
+    };
+    return res;
   } else {
     console.log("WASM unsupported, expect delay during proof generation");
-    proof = await p.generate_work(
+
+    let proof: WasmWork = null;
+    let time: number = null;
+    let res: SubmitWork = null;
+
+    const t0 = performance.now();
+
+    proof = await p.stepped_generate_work(
       config.salt,
       config.string,
-      config.difficulty_factor
+      config.difficulty_factor,
+      STEPS,
+      progress
     );
+    const t1 = performance.now();
+    time = t1 - t0;
+
+    const worker_type = JS;
+    res = {
+      result: proof.result,
+      nonce: proof.nonce,
+      worker_type,
+      time,
+    };
+
+    return res;
   }
-  return proof;
 };
 
 // credits: @jf-bastien on Stack Overflow

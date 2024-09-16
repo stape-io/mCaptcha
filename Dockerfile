@@ -1,4 +1,7 @@
-FROM node:16.0.0 as frontend
+# SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+FROM node:20 as frontend
 RUN set -ex; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
@@ -17,28 +20,11 @@ COPY Makefile /src/
 COPY scripts /src/scripts
 RUN make frontend
 
-FROM rust:latest as planner
-RUN cargo install cargo-chef
-WORKDIR /src
-COPY . /src/
-RUN cargo chef prepare --recipe-path recipe.json
-
-FROM rust:latest as cacher
-WORKDIR /src/
-RUN cargo install cargo-chef
-COPY --from=planner /src/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
-
 FROM rust:latest as rust
 WORKDIR /src
 COPY . .
-COPY --from=cacher /src/target target
-#COPY --from=cacher /src/db/db-core/target /src/db/db-core/target 
-#COPY --from=cacher /src/db/db-sqlx-postgres/target /src/db/db-sqlx-postgres/target
-#COPY --from=cacher /src/db/db-migrations/target /src/db/db-migrations/target
-#COPY --from=cacher /src/utils/cache-bust/target /src/utils/cache-bust/target
-COPY --from=frontend /src/docs/openapi/ /src/docs/openapi/
 COPY --from=frontend /src/static/cache/bundle/ /src/static/cache/bundle/
+COPY --from=frontend /src/docs/openapi/dist/ /src/docs/openapi/dist/
 RUN cargo --version
 RUN make cache-bust
 RUN cargo build --release
@@ -49,7 +35,6 @@ RUN set -ex; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends curl
-
 RUN useradd -ms /bin/bash -u 1001 mcaptcha
 WORKDIR /home/mcaptcha
 COPY --from=rust /src/target/release/mcaptcha /usr/local/bin/

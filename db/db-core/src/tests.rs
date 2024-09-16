@@ -1,22 +1,34 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Test utilities
 use crate::errors::*;
 use crate::prelude::*;
+
+/// easy traffic pattern
+pub const TRAFFIC_PATTERN: TrafficPattern = TrafficPattern {
+    avg_traffic: 500,
+    peak_sustainable_traffic: 5_000,
+    broke_my_site_traffic: Some(10_000),
+};
+
+/// levels for complex captcha config
+pub const LEVELS: [Level; 3] = [
+    Level {
+        difficulty_factor: 1,
+        visitor_threshold: 1,
+    },
+    Level {
+        difficulty_factor: 2,
+        visitor_threshold: 2,
+    },
+    Level {
+        difficulty_factor: 3,
+        visitor_threshold: 3,
+    },
+];
 
 /// test all database functions
 pub async fn database_works<'a, T: MCDatabase>(
@@ -211,6 +223,11 @@ pub async fn database_works<'a, T: MCDatabase>(
         tp
     );
 
+    // get all traffic patterns
+    let patterns = db.get_all_easy_captchas(10, 0).await.unwrap();
+    assert_eq!(patterns.get(0).as_ref().unwrap().key, c.key);
+    assert_eq!(&patterns.get(0).unwrap().traffic_pattern, tp);
+
     // delete traffic pattern
     db.delete_traffic_pattern(p.username, c.key).await.unwrap();
     assert!(
@@ -259,6 +276,157 @@ pub async fn database_works<'a, T: MCDatabase>(
     db.record_fetch(c.key).await.unwrap();
     db.record_solve(c.key).await.unwrap();
     db.record_confirm(c.key).await.unwrap();
+
+    // analytics start
+    db.analytics_create_psuedo_id_if_not_exists(c.key)
+        .await
+        .unwrap();
+    let psuedo_id = db
+        .analytics_get_psuedo_id_from_capmaign_id(c.key)
+        .await
+        .unwrap();
+    assert_eq!(
+        vec![psuedo_id.clone()],
+        db.analytics_get_all_psuedo_ids(0).await.unwrap()
+    );
+    assert!(db.analytics_get_all_psuedo_ids(1).await.unwrap().is_empty());
+
+    db.analytics_create_psuedo_id_if_not_exists(c.key)
+        .await
+        .unwrap();
+    assert_eq!(
+        psuedo_id,
+        db.analytics_get_psuedo_id_from_capmaign_id(c.key)
+            .await
+            .unwrap()
+    );
+
+    assert_eq!(
+        c.key,
+        db.analytics_get_capmaign_id_from_psuedo_id(&psuedo_id)
+            .await
+            .unwrap()
+    );
+
+    let analytics = CreatePerformanceAnalytics {
+        time: 1,
+        difficulty_factor: 1,
+        worker_type: "wasm".into(),
+    };
+
+    assert_eq!(
+        db.stats_get_num_logs_under_time(analytics.time)
+            .await
+            .unwrap(),
+        0
+    );
+
+    db.analysis_save(c.key, &analytics).await.unwrap();
+    assert_eq!(
+        db.stats_get_num_logs_under_time(analytics.time)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        db.stats_get_num_logs_under_time(analytics.time - 1)
+            .await
+            .unwrap(),
+        0
+    );
+    let limit = 50;
+    let mut offset = 0;
+    let a = db.analytics_fetch(c.key, limit, offset).await.unwrap();
+    assert_eq!(a[0].time, analytics.time);
+    assert_eq!(a[0].difficulty_factor, analytics.difficulty_factor);
+    assert_eq!(a[0].worker_type, analytics.worker_type);
+    offset += 1;
+    assert!(db
+        .analytics_fetch(c.key, limit, offset)
+        .await
+        .unwrap()
+        .is_empty());
+
+    db.analytics_delete_all_records_for_campaign(c.key)
+        .await
+        .unwrap();
+    assert_eq!(db.analytics_fetch(c.key, 1000, 0).await.unwrap().len(), 0);
+    assert!(!db.analytics_captcha_is_published(c.key).await.unwrap());
+
+    let rest_analytics = [
+        CreatePerformanceAnalytics {
+            time: 2,
+            difficulty_factor: 2,
+            worker_type: "wasm".into(),
+        },
+        CreatePerformanceAnalytics {
+            time: 3,
+            difficulty_factor: 3,
+            worker_type: "wasm".into(),
+        },
+        CreatePerformanceAnalytics {
+            time: 4,
+            difficulty_factor: 4,
+            worker_type: "wasm".into(),
+        },
+        CreatePerformanceAnalytics {
+            time: 5,
+            difficulty_factor: 5,
+            worker_type: "wasm".into(),
+        },
+    ];
+    for a in rest_analytics.iter() {
+        db.analysis_save(c.key, &a).await.unwrap();
+    }
+    assert!(db
+        .stats_get_entry_at_location_for_time_limit_asc(1, 2)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        db.stats_get_entry_at_location_for_time_limit_asc(2, 1)
+            .await
+            .unwrap(),
+        Some(2)
+    );
+    assert_eq!(
+        db.stats_get_entry_at_location_for_time_limit_asc(3, 2)
+            .await
+            .unwrap(),
+        Some(3)
+    );
+
+    db.analytics_delete_all_records_for_campaign(c.key)
+        .await
+        .unwrap();
+    // analytics end
+
+    // nonce tracking start
+    assert_eq!(
+        db.get_max_nonce_for_level(c.key, l[0].difficulty_factor)
+            .await
+            .unwrap(),
+        0
+    );
+    db.update_max_nonce_for_level(c.key, l[0].difficulty_factor, 1000)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.get_max_nonce_for_level(c.key, l[0].difficulty_factor)
+            .await
+            .unwrap(),
+        1000
+    );
+    db.update_max_nonce_for_level(c.key, l[0].difficulty_factor, 10_000)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.get_max_nonce_for_level(c.key, l[0].difficulty_factor)
+            .await
+            .unwrap(),
+        10_000
+    );
+    // nonce tracking end
 
     assert_eq!(db.fetch_solve(p.username, c.key).await.unwrap().len(), 1);
     assert_eq!(

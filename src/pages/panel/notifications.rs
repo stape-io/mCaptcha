@@ -1,19 +1,7 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use actix_identity::Identity;
 use actix_web::{HttpResponse, Responder};
@@ -50,7 +38,7 @@ impl From<db_core::Notification> for Notification {
         Notification {
             name: n.name.unwrap(),
             heading: n.heading.unwrap(),
-            received: OffsetDateTime::from_unix_timestamp(n.received.unwrap()),
+            received: OffsetDateTime::from_unix_timestamp(n.received.unwrap()).unwrap(),
             id: n.id.unwrap(),
             message: n.message.unwrap(),
         }
@@ -103,28 +91,35 @@ mod tests {
 
         // seconds test
         assert!(n.print_date().contains("seconds ago"));
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 5);
+        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 5).unwrap();
         assert!(n.print_date().contains("seconds ago"));
 
         // minutes test
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - MINUTE * 2);
+        n.received =
+            OffsetDateTime::from_unix_timestamp(timestamp - MINUTE * 2).unwrap();
         assert!(n.print_date().contains("minutes ago"));
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - MINUTE * 56);
+        n.received =
+            OffsetDateTime::from_unix_timestamp(timestamp - MINUTE * 56).unwrap();
         assert!(n.print_date().contains("minutes ago"));
 
         // hours test
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - HOUR);
+        n.received = OffsetDateTime::from_unix_timestamp(timestamp - HOUR).unwrap();
         assert!(n.print_date().contains("hours ago"));
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - HOUR * 23);
+        n.received = OffsetDateTime::from_unix_timestamp(timestamp - HOUR * 23).unwrap();
         assert!(n.print_date().contains("hours ago"));
 
         // days test
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 2 * WEEK);
+        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 2 * WEEK).unwrap();
         assert!(n.print_date().contains("days ago"));
 
         // date test
-        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 6 * WEEK);
-        let date = n.received.format("%d-%m-%y");
+        n.received = OffsetDateTime::from_unix_timestamp(timestamp - 6 * WEEK).unwrap();
+        let date = format!(
+            "{}{}{}",
+            n.received.year(),
+            n.received.month(),
+            n.received.date()
+        );
         assert!(n.print_date().contains(&date))
     }
 }

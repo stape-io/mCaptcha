@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
 <form class="sitekey-form" action="<.= crate::V1_API_ROUTES.captcha.easy.create .>" method="post">
   <div class="sitekey-form__advance-options-container">
 	<h1 class="sitekey-form__advance-options-form-title">
@@ -23,6 +29,7 @@
 	  />
 	</label>
 
+
     <label class="sitekey-form__label" for="avg_traffic">
 		Average Traffic of your website
 	  <input
@@ -36,7 +43,6 @@
         <. } .>
 	  />
 	</label>
-
 
 
     <label class="sitekey-form__label" for="avg_traffic">
@@ -67,6 +73,18 @@
 
 	  />
 	</label>
+
+
+    <label class="sitekey-form__label" for="publish_benchmarks">
+        Anonymously publish CAPTCHA performance statistics to help other webmasters. <a href="https://mcaptcha.org/blog/introducing-mcaptcha-net">Please see here for more info</a>.
+	  <input
+		class="sitekey-form__input"
+		type="checkbox"
+		name="publish_benchmarks"
+		id="publish_benchmarks"
+	  />
+	</label>
+
 
   <button class="sitekey-form__submit" type="submit">Submit</button>
 </form>

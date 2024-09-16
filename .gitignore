@@ -17,3 +17,7 @@ assets
 yarn-error.log
 docker-compose.override.yml
 .idea
+src/cache_buster_data.json.license
+**/**/target
+src/libcachebust_data.json
+utils/cache-bust/src/libcachebust_data.json

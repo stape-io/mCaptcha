@@ -1,24 +1,14 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::time::Duration;
 //use std::sync::atomicBool
 
 use actix::clock::sleep;
 use actix::spawn;
+use tokio::sync::oneshot::{channel, error::TryRecvError, Receiver, Sender};
 use tokio::task::JoinHandle;
 
 use crate::api::v1::account::delete::runners::delete_user;
@@ -34,20 +24,24 @@ pub const DEMO_USER: &str = "aaronsw";
 pub const DEMO_PASSWORD: &str = "password";
 
 pub struct DemoUser {
-    handle: JoinHandle<()>,
+    tx: Sender<()>,
 }
 
 impl DemoUser {
-    pub async fn spawn(data: AppData, duration: Duration) -> ServiceResult<Self> {
-        let handle = Self::run(data, duration).await?;
-        let d = Self { handle };
+    pub async fn spawn(
+        data: AppData,
+        duration: u32,
+    ) -> ServiceResult<(Self, JoinHandle<()>)> {
+        let (tx, rx) = channel();
+        let handle = Self::run(data, duration, rx).await?;
+        let d = Self { tx };
 
-        Ok(d)
+        Ok((d, handle))
     }
 
     #[allow(dead_code)]
-    pub fn abort(&self) {
-        self.handle.abort();
+    pub fn abort(mut self) {
+        self.tx.send(());
     }
 
     /// register demo user runner
@@ -82,16 +76,38 @@ impl DemoUser {
 
     pub async fn run(
         data: AppData,
-        duration: Duration,
+        duration: u32,
+        mut rx: Receiver<()>,
     ) -> ServiceResult<JoinHandle<()>> {
         Self::register_demo_user(&data).await?;
 
+        fn can_run(rx: &mut Receiver<()>) -> bool {
+            match rx.try_recv() {
+                Err(TryRecvError::Empty) => true,
+                _ => false,
+            }
+        }
+
+        let mut exit = false;
         let fut = async move {
             loop {
-                sleep(duration).await;
+                if exit {
+                    break;
+                }
+                for _ in 0..duration {
+                    if can_run(&mut rx) {
+                        sleep(Duration::new(1, 0)).await;
+                        continue;
+                    } else {
+                        exit = true;
+                        break;
+                    }
+                }
+
                 if let Err(e) = Self::delete_demo_user(&data).await {
                     log::error!("Error while deleting demo user: {:?}", e);
                 }
+
                 if let Err(e) = Self::register_demo_user(&data).await {
                     log::error!("Error while registering demo user: {:?}", e);
                 }
@@ -132,7 +148,7 @@ mod tests {
         let duration = Duration::from_secs(DURATION);
 
         // register works
-        let _ = DemoUser::register_demo_user(&data).await.unwrap();
+        DemoUser::register_demo_user(&data).await.unwrap();
         let payload = AccountCheckPayload {
             val: DEMO_USER.into(),
         };
@@ -144,7 +160,7 @@ mod tests {
         assert!(!username_exists(&payload, &data).await.unwrap().exists);
 
         // test the runner
-        let user = DemoUser::spawn(data, duration).await.unwrap();
+        let user = DemoUser::spawn(data, DURATION as u32).await.unwrap();
         let (_, signin_resp, token_key) =
             add_levels_util(data_inner, DEMO_USER, DEMO_PASSWORD).await;
         let cookies = get_cookie!(signin_resp);
@@ -173,6 +189,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let res_levels: Vec<Level> = test::read_body_json(resp).await;
         assert!(res_levels.is_empty());
-        user.abort();
+        user.0.abort();
+        user.1.await.unwrap();
     }
 }

@@ -1,21 +1,13 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! App data: redis cache, database connections, etc.
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use actix::prelude::*;
 use argon2_creds::{Config, ConfigBuilder, PasswordPolicy};
@@ -38,11 +30,17 @@ use libmcaptcha::{
     pow::Work,
     system::{System, SystemBuilder},
 };
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
+use tokio::time::sleep;
 
 use crate::db::{self, BoxDB};
 use crate::errors::ServiceResult;
 use crate::settings::Settings;
 use crate::stats::{Dummy, Real, Stats};
+use crate::survey::SecretsStore;
+use crate::AppData;
 
 macro_rules! enum_system_actor {
     ($name:ident, $type:ident) => {
@@ -83,7 +81,11 @@ impl SystemGroup {
     enum_system_wrapper!(get_pow, String, CaptchaResult<Option<PoWConfig>>);
 
     // utility function to verify [Work]
-    pub async fn verify_pow(&self, msg: Work, ip: String) -> CaptchaResult<String> {
+    pub async fn verify_pow(
+        &self,
+        msg: Work,
+        ip: String,
+    ) -> CaptchaResult<(String, u32)> {
         match self {
             Self::Embedded(val) => val.verify_pow(msg, ip).await,
             Self::Redis(val) => val.verify_pow(msg, ip).await,
@@ -172,6 +174,8 @@ pub struct Data {
     pub settings: Settings,
     /// stats recorder
     pub stats: Box<dyn Stats>,
+    /// survey secret store
+    pub survey_secrets: SecretsStore,
 }
 
 impl Data {
@@ -186,7 +190,7 @@ impl Data {
     }
     #[cfg(not(tarpaulin_include))]
     /// create new instance of app data
-    pub async fn new(s: &Settings) -> Arc<Self> {
+    pub async fn new(s: &Settings, survey_secrets: SecretsStore) -> Arc<Self> {
         let creds = Self::get_creds();
         let c = creds.clone();
 
@@ -203,9 +207,9 @@ impl Data {
         };
 
         let stats: Box<dyn Stats> = if s.captcha.enable_stats {
-            Box::new(Real::default())
+            Box::<Real>::default()
         } else {
-            Box::new(Dummy::default())
+            Box::<Dummy>::default()
         };
 
         let data = Data {
@@ -215,6 +219,7 @@ impl Data {
             mailer: Self::get_mailer(s),
             settings: s.clone(),
             stats,
+            survey_secrets,
         };
 
         #[cfg(not(debug_assertions))]
@@ -247,6 +252,13 @@ impl Data {
         } else {
             None
         }
+    }
+
+    async fn upload_survey_job(&self) -> ServiceResult<()> {
+        unimplemented!()
+    }
+    async fn register_survey(&self) -> ServiceResult<()> {
+        unimplemented!()
     }
 }
 

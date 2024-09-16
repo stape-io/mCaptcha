@@ -1,19 +1,7 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use actix_web::test;
 use actix_web::{
@@ -32,6 +20,7 @@ use crate::api::v1::mcaptcha::create::CreateCaptcha;
 use crate::api::v1::mcaptcha::create::MCaptchaDetails;
 use crate::api::v1::ROUTES;
 use crate::errors::*;
+use crate::survey::SecretsStore;
 use crate::ArcData;
 
 pub fn get_settings() -> Settings {
@@ -40,39 +29,69 @@ pub fn get_settings() -> Settings {
 pub mod pg {
     use std::env;
 
+    use sqlx::migrate::MigrateDatabase;
+
+    use crate::api::v1::mcaptcha::get_random;
     use crate::data::Data;
     use crate::settings::*;
+    use crate::survey::SecretsStore;
     use crate::ArcData;
 
     use super::get_settings;
 
     pub async fn get_data() -> ArcData {
         let url = env::var("POSTGRES_DATABASE_URL").unwrap();
+
+        let mut parsed = url::Url::parse(&url).unwrap();
+        parsed.set_path(&get_random(16));
+        let url = parsed.to_string();
+
+        if sqlx::Postgres::database_exists(&url).await.unwrap() {
+            sqlx::Postgres::drop_database(&url).await.unwrap();
+        }
+        sqlx::Postgres::create_database(&url).await.unwrap();
+
         let mut settings = get_settings();
         settings.captcha.runners = Some(1);
         settings.database.url = url.clone();
         settings.database.database_type = DBType::Postgres;
-        let data = Data::new(&settings).await;
-        data
+        settings.database.pool = 2;
+
+        Data::new(&settings, SecretsStore::default()).await
     }
 }
 pub mod maria {
     use std::env;
 
+    use sqlx::migrate::MigrateDatabase;
+
+    use crate::api::v1::mcaptcha::get_random;
     use crate::data::Data;
     use crate::settings::*;
+    use crate::survey::SecretsStore;
     use crate::ArcData;
 
     use super::get_settings;
 
     pub async fn get_data() -> ArcData {
         let url = env::var("MARIA_DATABASE_URL").unwrap();
+
+        let mut parsed = url::Url::parse(&url).unwrap();
+        parsed.set_path(&get_random(16));
+        let url = parsed.to_string();
+
+        if sqlx::MySql::database_exists(&url).await.unwrap() {
+            sqlx::MySql::drop_database(&url).await.unwrap();
+        }
+        sqlx::MySql::create_database(&url).await.unwrap();
+
         let mut settings = get_settings();
         settings.captcha.runners = Some(1);
         settings.database.url = url.clone();
         settings.database.database_type = DBType::Maria;
-        let data = Data::new(&settings).await;
-        data
+        settings.database.pool = 2;
+
+        Data::new(&settings, SecretsStore::default()).await
     }
 }
 //pub async fn get_data() -> ArcData {
@@ -118,7 +137,7 @@ macro_rules! get_app {
                 .wrap(actix_middleware::NormalizePath::new(
                     actix_middleware::TrailingSlash::Trim,
                 ))
-                .configure(crate::routes::services),
+                .configure($crate::routes::services),
         )
     };
     ($data:expr) => {
@@ -128,7 +147,7 @@ macro_rules! get_app {
                 .wrap(actix_middleware::NormalizePath::new(
                     actix_middleware::TrailingSlash::Trim,
                 ))
-                .configure(crate::routes::services)
+                .configure($crate::routes::services)
                 //.data(std::sync::Arc::new(crate::data::Data::new().await))
                 .app_data(actix_web::web::Data::new($data.clone())),
         )
@@ -189,6 +208,26 @@ pub async fn signin(
             .await;
     assert_eq!(signin_resp.status(), StatusCode::OK);
     (creds, signin_resp)
+}
+
+/// pub duplicate test
+pub async fn bad_post_req_test_no_auth<T: Serialize>(
+    data: &ArcData,
+    url: &str,
+    payload: &T,
+    err: ServiceError,
+) {
+    let app = get_app!(data).await;
+
+    let resp = test::call_service(&app, post_request!(&payload, url).to_request()).await;
+    if resp.status() != err.status_code() {
+        let resp_err: ErrorToResponse = test::read_body_json(resp).await;
+        panic!("error {}", resp_err.error);
+    }
+    assert_eq!(resp.status(), err.status_code());
+    let resp_err: ErrorToResponse = test::read_body_json(resp).await;
+    //println!("{}", txt.error);
+    assert_eq!(resp_err.error, format!("{}", err));
 }
 
 /// pub duplicate test
@@ -262,5 +301,6 @@ pub fn get_level_data() -> CreateCaptcha {
         levels,
         duration: 30,
         description: "dummy".into(),
+        publish_benchmarks: false,
     }
 }

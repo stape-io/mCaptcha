@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use actix_auth_middleware::Authentication;
 use actix_web::web::ServiceConfig;
 
@@ -74,7 +63,7 @@ mod tests {
 
         let edit_sitekey_url = PAGES.panel.sitekey.get_edit_advance(&token_key.key);
         let delete_sitekey_url = PAGES.panel.sitekey.get_delete(&token_key.key);
-        let urls = vec![
+        let urls = [
             PAGES.home,
             PAGES.panel.sitekey.add_advance,
             PAGES.panel.sitekey.add_easy,
@@ -111,7 +100,7 @@ mod tests {
     #[actix_rt::test]
     async fn public_pages_tempaltes_work() {
         let app = test::init_service(App::new().configure(services)).await;
-        let urls = vec![PAGES.auth.login, PAGES.auth.join, PAGES.sitemap];
+        let urls = [PAGES.auth.login, PAGES.auth.join, PAGES.sitemap];
 
         for url in urls.iter() {
             let resp =

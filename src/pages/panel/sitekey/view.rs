@@ -1,19 +1,7 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use actix_identity::Identity;
 use actix_web::{web, HttpResponse, Responder};
@@ -36,6 +24,7 @@ struct IndexPage {
     key: String,
     levels: Vec<Level>,
     stats: CaptchaStats,
+    publish_benchmarks: bool,
 }
 
 impl IndexPage {
@@ -44,6 +33,7 @@ impl IndexPage {
         config: Captcha,
         levels: Vec<Level>,
         key: String,
+        publish_benchmarks: bool,
     ) -> Self {
         IndexPage {
             duration: config.duration as u32,
@@ -51,6 +41,7 @@ impl IndexPage {
             levels,
             key,
             stats,
+            publish_benchmarks,
         }
     }
 }
@@ -70,8 +61,9 @@ pub async fn view_sitekey(
     let config = data.db.get_captcha_config(&username, &key).await?;
     let levels = data.db.get_captcha_levels(Some(&username), &key).await?;
     let stats = data.stats.fetch(&data, &username, &key).await?;
+    let publish_benchmarks = data.db.analytics_captcha_is_published(&key).await?;
 
-    let body = IndexPage::new(stats, config, levels, key)
+    let body = IndexPage::new(stats, config, levels, key, publish_benchmarks)
         .render_once()
         .unwrap();
     Ok(HttpResponse::Ok()

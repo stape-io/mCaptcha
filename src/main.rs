@@ -1,19 +1,9 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+#![allow(warnings)]
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::env;
 use std::sync::Arc;
 
@@ -24,6 +14,7 @@ use actix_web::{
 };
 use lazy_static::lazy_static;
 use log::info;
+use tokio::task::JoinHandle;
 
 mod api;
 mod data;
@@ -31,6 +22,7 @@ mod date;
 mod db;
 mod demo;
 mod docs;
+mod easy;
 mod email;
 mod errors;
 #[macro_use]
@@ -40,6 +32,7 @@ mod routes;
 mod settings;
 mod static_assets;
 mod stats;
+mod survey;
 #[cfg(test)]
 #[macro_use]
 mod tests;
@@ -55,6 +48,7 @@ use static_assets::FileMap;
 pub use widget::WIDGET_ROUTES;
 
 use crate::demo::DemoUser;
+use survey::SurveyClientTrait;
 
 lazy_static! {
     pub static ref SETTINGS: Settings = Settings::new().unwrap();
@@ -103,7 +97,9 @@ pub type AppData = actix_web::web::Data<ArcData>;
 async fn main() -> std::io::Result<()> {
     use std::time::Duration;
 
-    env::set_var("RUST_LOG", "info");
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info");
+    }
 
     pretty_env_logger::init();
     info!(
@@ -112,17 +108,36 @@ async fn main() -> std::io::Result<()> {
     );
 
     let settings = Settings::new().unwrap();
-    let data = Data::new(&settings).await;
+    let secrets = survey::SecretsStore::default();
+    let data = Data::new(&settings, secrets.clone()).await;
     let data = actix_web::web::Data::new(data);
 
-    let mut demo_user: Option<DemoUser> = None;
+    let mut demo_user: Option<(DemoUser, JoinHandle<()>)> = None;
 
     if settings.allow_demo && settings.allow_registration {
-        demo_user = Some(
-            DemoUser::spawn(data.clone(), Duration::from_secs(60 * 30))
+        demo_user = Some(DemoUser::spawn(data.clone(), 60 * 30).await.unwrap());
+    }
+
+    let mut update_easy_captcha: Option<(easy::UpdateEasyCaptcha, JoinHandle<()>)> =
+        None;
+    if settings
+        .captcha
+        .default_difficulty_strategy
+        .avg_traffic_time
+        .is_some()
+    {
+        update_easy_captcha = Some(
+            easy::UpdateEasyCaptcha::spawn(data.clone(), 60 * 30)
                 .await
                 .unwrap(),
         );
+    }
+
+    let (mut survey_upload_tx, mut survey_upload_handle) = (None, None);
+    if settings.survey.is_some() {
+        let survey_runner_ctx = survey::Survey::new(data.clone());
+        let (x, y) = survey_runner_ctx.start_job().await.unwrap();
+        (survey_upload_tx, survey_upload_handle) = (Some(x), Some(y));
     }
 
     let ip = settings.server.get_ip();
@@ -149,9 +164,24 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await?;
 
-    if let Some(demo_user) = demo_user {
-        demo_user.abort();
+    if let Some(survey_upload_tx) = survey_upload_tx {
+        survey_upload_tx.send(()).unwrap();
     }
+
+    if let Some(demo_user) = demo_user {
+        demo_user.0.abort();
+        demo_user.1.await.unwrap();
+    }
+
+    if let Some(update_easy_captcha) = update_easy_captcha {
+        update_easy_captcha.0.abort();
+        update_easy_captcha.1.await.unwrap();
+    }
+
+    if let Some(survey_upload_handle) = survey_upload_handle {
+        survey_upload_handle.await.unwrap();
+    }
+
     Ok(())
 }
 

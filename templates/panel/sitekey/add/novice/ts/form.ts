@@ -1,19 +1,8 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import getFormUrl from "../../../../../utils/getFormUrl";
 import genJsonPayload from "../../../../../utils/genJsonPayload";
 import isBlankString from "../../../../../utils/isBlankString";
@@ -42,6 +31,7 @@ type TrafficPattern = {
   peak_sustainable_traffic: number;
   broke_my_site_traffic?: number;
   description: string;
+  publish_benchmarks: boolean;
 };
 
 export const validate = (e: Event): TrafficPattern => {
@@ -49,14 +39,16 @@ export const validate = (e: Event): TrafficPattern => {
 
   let broke_is_set = false;
 
-  const AVG_TRAFFIC = <HTMLInputElement>(
-    FORM.querySelector("#avg_traffic")
-  );
+  const AVG_TRAFFIC = <HTMLInputElement>FORM.querySelector("#avg_traffic");
   const PEAK_TRAFFIC = <HTMLInputElement>(
     FORM.querySelector("#peak_sustainable_traffic")
   );
   const BROKE_MY_SITE_TRAFFIC = <HTMLInputElement>(
     FORM.querySelector("#broke_my_site_traffic")
+  );
+
+  const PUBLISH_BENCHMARKS = <HTMLInputElement>(
+    FORM.querySelector("#publish_benchmarks")
   );
 
   isBlankString(AVG_TRAFFIC.value, avg_traffic_name);
@@ -101,6 +93,7 @@ export const validate = (e: Event): TrafficPattern => {
     peak_sustainable_traffic,
     broke_my_site_traffic,
     description,
+    publish_benchmarks: PUBLISH_BENCHMARKS.checked,
   };
 
   return payload;

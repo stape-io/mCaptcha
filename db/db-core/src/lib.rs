@@ -1,19 +1,7 @@
-/*
- * Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+// Copyright (C) 2022  Aravinth Manivannan <realaravinth@batsense.net>
+// SPDX-FileCopyrightText: 2023 Aravinth Manivannan <realaravinth@batsense.net>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 #![warn(missing_docs)]
 //! # `mCaptcha` database operations
@@ -214,6 +202,13 @@ pub trait MCDatabase: std::marker::Send + std::marker::Sync + CloneSPDatabase {
         captcha_key: &str,
     ) -> DBResult<TrafficPattern>;
 
+    /// Get all easy captcha configurations on instance
+    async fn get_all_easy_captchas(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> DBResult<Vec<EasyCaptcha>>;
+
     /// Delete traffic configuration
     async fn delete_traffic_pattern(
         &self,
@@ -250,6 +245,110 @@ pub trait MCDatabase: std::marker::Send + std::marker::Sync + CloneSPDatabase {
 
     /// fetch PoWConfig confirms
     async fn fetch_confirm(&self, user: &str, key: &str) -> DBResult<Vec<i64>>;
+
+    /// record PoW timing
+    async fn analysis_save(
+        &self,
+        captcha_id: &str,
+        d: &CreatePerformanceAnalytics,
+    ) -> DBResult<()>;
+
+    /// fetch PoW analytics
+    async fn analytics_fetch(
+        &self,
+        captcha_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> DBResult<Vec<PerformanceAnalytics>>;
+
+    /// Create psuedo ID against campaign ID to publish analytics
+    async fn analytics_create_psuedo_id_if_not_exists(
+        &self,
+        captcha_id: &str,
+    ) -> DBResult<()>;
+
+    /// Get psuedo ID from campaign ID
+    async fn analytics_get_psuedo_id_from_capmaign_id(
+        &self,
+        captcha_id: &str,
+    ) -> DBResult<String>;
+
+    /// Get campaign ID from psuedo ID
+    async fn analytics_get_capmaign_id_from_psuedo_id(
+        &self,
+        psuedo_id: &str,
+    ) -> DBResult<String>;
+
+    /// Delete all records for campaign
+    async fn analytics_delete_all_records_for_campaign(
+        &self,
+        campaign_id: &str,
+    ) -> DBResult<()>;
+
+    /// Get publishing status of pow analytics for captcha ID/ campaign ID
+    async fn analytics_captcha_is_published(&self, campaign_id: &str) -> DBResult<bool> {
+        match self
+            .analytics_get_psuedo_id_from_capmaign_id(campaign_id)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(errors::DBError::CaptchaNotFound) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get all psuedo IDs
+    async fn analytics_get_all_psuedo_ids(&self, page: usize) -> DBResult<Vec<String>>;
+
+    /// Track maximum nonce received against captcha levels
+    async fn update_max_nonce_for_level(
+        &self,
+        captcha_key: &str,
+        difficulty_factor: u32,
+        latest_nonce: u32,
+    ) -> DBResult<()>;
+
+    /// Get maximum nonce tracked so far for captcha levels
+    async fn get_max_nonce_for_level(
+        &self,
+        captcha_key: &str,
+        difficulty_factor: u32,
+    ) -> DBResult<u32>;
+
+    /// Get number of analytics entries that are under a certain duration
+    async fn stats_get_num_logs_under_time(&self, duration: u32) -> DBResult<usize>;
+
+    /// Get the entry at a location in the list of analytics entires under a certain time limit
+    /// and sorted in ascending order
+    async fn stats_get_entry_at_location_for_time_limit_asc(
+        &self,
+        duration: u32,
+        location: u32,
+    ) -> DBResult<Option<usize>>;
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+/// Log Proof-of-Work CAPTCHA performance analytics
+pub struct CreatePerformanceAnalytics {
+    /// time taken to generate proof
+    pub time: u32,
+    /// difficulty factor for which the proof was generated
+    pub difficulty_factor: u32,
+    /// worker/client type: wasm, javascript, python, etc.
+    pub worker_type: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+/// Proof-of-Work CAPTCHA performance analytics
+pub struct PerformanceAnalytics {
+    /// log ID
+    pub id: usize,
+    /// time taken to generate proof
+    pub time: u32,
+    /// difficulty factor for which the proof was generated
+    pub difficulty_factor: u32,
+    /// worker/client type: wasm, javascript, python, etc.
+    pub worker_type: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
@@ -289,6 +388,19 @@ pub struct AddNotification<'a> {
     pub heading: &'a str,
     /// message of the notification
     pub message: &'a str,
+}
+
+#[derive(Default, PartialEq, Serialize, Deserialize, Clone, Debug)]
+/// Represents Easy captcha configuration
+pub struct EasyCaptcha {
+    /// traffic pattern of easy captcha
+    pub traffic_pattern: TrafficPattern,
+    /// captcha key/sitekey
+    pub key: String,
+    /// captcha description
+    pub description: String,
+    /// Owner of the captcha configuration
+    pub username: String,
 }
 
 #[derive(Default, PartialEq, Serialize, Deserialize, Clone, Debug)]
@@ -332,7 +444,6 @@ pub struct Secret {
     /// user's secret
     pub secret: String,
 }
-
 /// Trait to clone MCDatabase
 pub trait CloneSPDatabase {
     /// clone DB

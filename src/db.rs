@@ -34,7 +34,7 @@ pub mod pg {
             disable_logging: !settings.debug,
         });
         let db = connection_options.connect().await.unwrap();
-        // db.migrate().await.unwrap();
+        db.migrate().await.unwrap();
         Box::new(db)
     }
 }
@@ -54,7 +54,7 @@ pub mod maria {
             disable_logging: !settings.debug,
         });
         let db = connection_options.connect().await.unwrap();
-        // db.migrate().await.unwrap();
+        db.migrate().await.unwrap();
         Box::new(db)
     }
 }

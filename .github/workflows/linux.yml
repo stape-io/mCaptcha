@@ -3,13 +3,13 @@ name: Build
 on:
   schedule:
     - cron: "0 9 * * *"
-  pull_request:
-    types: [opened, synchronize, reopened]
+  # pull_request:
+  #   types: [opened, synchronize, reopened]
   push:
     branches:
       - master
       - "*"
-      - '!gh-pages'
+      - "!gh-pages"
 
 jobs:
   build_and_test:
@@ -55,7 +55,7 @@ jobs:
 
       maria:
         image: mariadb
-        env: 
+        env:
           MARIADB_USER: "maria"
           MARIADB_PASSWORD: "password"
           MARIADB_ROOT_PASSWORD: "password"
@@ -114,7 +114,8 @@ jobs:
         run: make
         env:
           POSTGRES_DATABASE_URL: "${{ env.POSTGRES_DATABASE_URL }}"
-          MARIA_DATABASE_URL: "${{ env.MARIA_DATABASE_URL }}"
+          MARIA_DATABASE_URL:
+            "${{ env.MARIA_DATABASE_URL }}"
 
             #      - name: build frontend
             #        run: make frontend

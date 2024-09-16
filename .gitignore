@@ -5,6 +5,7 @@ tarpaulin-report.html
 cobertura.xml
 prod/
 node_modules/
+data/
 /static-assets/bundle
 static/cache/bundle
 ./templates/**/*.js
@@ -14,6 +15,8 @@ coverage
 dist
 assets
 yarn-error.log
+docker-compose.override.yml
+.idea
 src/cache_buster_data.json.license
 **/**/target
 src/libcachebust_data.json

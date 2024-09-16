@@ -34,9 +34,10 @@ WORKDIR /src
 COPY . .
 COPY --from=cacher /src/target target
 #COPY --from=cacher /src/db/db-core/target /src/db/db-core/target 
-#COPY --from=cacher /src/db/db-sqlx-postgres/target /src/db/db-sqlx-postgres/target 
-#COPY --from=cacher /src/db/db-migrations/target /src/db/db-migrations/target 
-#COPY --from=cacher /src/utils/cache-bust/target /src/utils/cache-bust/target 
+#COPY --from=cacher /src/db/db-sqlx-postgres/target /src/db/db-sqlx-postgres/target
+#COPY --from=cacher /src/db/db-migrations/target /src/db/db-migrations/target
+#COPY --from=cacher /src/utils/cache-bust/target /src/utils/cache-bust/target
+COPY --from=frontend /src/docs/openapi/ /docs/openapi/
 COPY --from=frontend /src/static/cache/bundle/ /src/static/cache/bundle/
 RUN cargo --version
 RUN make cache-bust

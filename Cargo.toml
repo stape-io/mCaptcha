@@ -23,6 +23,7 @@ name = "mcaptcha"
 path = "./src/main.rs"
 
 [dependencies]
+time = "0.3.35"
 actix-web = "4.0.1"
 actix = "0.13"
 actix-identity = "0.4.0"

@@ -1,12 +1,12 @@
-#name: Create binary for release
-#
-## Only on tags that start with a "v"
-#on:
+# name: Create binary for release
+
+# # Only on tags that start with a "v"
+# on:
 #  push:
 #    tags:
 #      - "v*"
-#
-#jobs:
+
+# jobs:
 #  build:
 #    runs-on: ubuntu-latest
 #    strategy:
@@ -22,7 +22,7 @@
 #    steps:
 #      - name: Checkout
 #        uses: actions/checkout@v3
-#
+
 #      - name: Compile and release
 #        uses: rust-build/rust-build.action@v1.3.2
 #        env:

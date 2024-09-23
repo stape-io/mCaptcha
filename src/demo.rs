@@ -21,7 +21,7 @@ use errors::*;
 /// Demo username
 pub const DEMO_USER: &str = "aaronsw";
 /// Demo password
-pub const DEMO_PASSWORD: &str = "password";
+pub const DEMO_PASSWORD: &str = "test-password";
 
 pub struct DemoUser {
     tx: Sender<()>,
